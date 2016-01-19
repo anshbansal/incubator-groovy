@@ -39,6 +39,9 @@ public class CompilerConfiguration {
 
     private static final String JDK5_CLASSNAME_CHECK = "java.lang.annotation.Annotation";
 
+    /** This (<code>"indy"</code>) is the Optimization Option value for enabling <code>invokedynamic</code> complilation. */
+    public static final String INVOKEDYNAMIC = "indy";
+
     /** This (<code>"1.4"</code>) is the value for targetBytecode to compile for a JDK 1.4. **/
     public static final String JDK4 = "1.4";
     /** This (<code>"1.5"</code>) is the value for targetBytecode to compile for a JDK 1.5. **/
@@ -214,12 +217,12 @@ public class CompilerConfiguration {
         } catch (Exception e) {
             // IGNORE
         }
-        if (DEFAULT!=null && Boolean.TRUE.equals(DEFAULT.getOptimizationOptions().get("indy"))) {
+        if (DEFAULT!=null && Boolean.TRUE.equals(DEFAULT.getOptimizationOptions().get(INVOKEDYNAMIC))) {
             indy = true;
         }
         Map options = new HashMap<String,Boolean>(3);
         if (indy) {
-            options.put("indy", Boolean.TRUE);
+            options.put(INVOKEDYNAMIC, Boolean.TRUE);
         }
         setOptimizationOptions(options);
     }
@@ -390,8 +393,8 @@ public class CompilerConfiguration {
     }
 
     /**
-     * Method to configure a this CompilerConfiguration by using Properties.
-     * For a list of available properties look at {link {@link #CompilerConfiguration(Properties)}.
+     * Method to configure a CompilerConfiguration by using Properties.
+     * For a list of available properties look at {@link #CompilerConfiguration(Properties)}.
      * @param configuration The properties to get flag values from.
      */
     public void configure(Properties configuration) throws ConfigurationException {
@@ -516,7 +519,7 @@ public class CompilerConfiguration {
     }
 
     /**
-     * Gets the currently configured warning level.  See WarningMessage
+     * Gets the currently configured warning level. See {@link WarningMessage}
      * for level details.
      */
     public int getWarningLevel() {
@@ -524,7 +527,7 @@ public class CompilerConfiguration {
     }
 
     /**
-     * Sets the warning level.  See WarningMessage for level details.
+     * Sets the warning level. See {@link WarningMessage} for level details.
      */
     public void setWarningLevel(int level) {
         if (level < WarningMessage.NONE || level > WarningMessage.PARANOIA) {

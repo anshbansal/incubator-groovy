@@ -648,6 +648,30 @@ Printer
         '''
     }
 
+    void testAmbiguousMethodResolutionGroovy7710NoArgsOverloaded() {
+        shouldFailWithMessages '''
+            Arrays.sort()
+        ''', 'Reference to method is ambiguous. Cannot choose between '
+    }
+
+    void testAmbiguousMethodResolutionGroovy7711NoArgsCovariantOverride() {
+        assertScript '''
+            class A {}
+            class B {
+                Object m(Object[] args) {
+                    new Object()
+                }
+            }
+            class C extends B {
+                A m(Object[] args) {
+                    new A()
+                }
+            }
+            C c = new C()
+            A a = c.m()
+        '''
+    }
+
     // GROOVY-6911
     void testShouldNotThrowArrayIndexOfOutBoundsException() {
         assertScript '''
@@ -658,7 +682,39 @@ Printer
             }
 
             Map<String, Object> m = new C().bar()
-            List tmp = (List) m.get("some_key_here")     // <---  actually groovy crashes here!!
+            List tmp = (List) m.get("some_key_here")
+        '''
+    }
+
+    // GROOVY-7416
+    void testMethodsFromInterfacesOfSuperClassesShouldBeVisible() {
+        assertScript '''
+            interface SomeInterface {
+                void someInterfaceMethod()
+            }
+
+            abstract class AbstractSuperClass implements SomeInterface {}
+
+            abstract class AbstractSubClass extends AbstractSuperClass {
+                void someMethod() {
+                    someInterfaceMethod()
+                }
+            }
+
+            assert AbstractSubClass.name == 'AbstractSubClass'
+        '''
+        assertScript '''
+            interface SomeInterface { void foo() }
+            interface SomeOtherInterface { void bar() }
+            interface AnotherInterface extends SomeInterface, SomeOtherInterface {}
+
+            abstract class Parent implements AnotherInterface {}
+
+            abstract class Child extends Parent {
+                void baz() { foo(); bar() }
+            }
+
+            assert Child.name == 'Child'
         '''
     }
 }

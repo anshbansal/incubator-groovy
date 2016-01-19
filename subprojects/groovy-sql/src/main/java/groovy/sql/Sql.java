@@ -165,7 +165,7 @@ import static org.codehaus.groovy.runtime.SqlGroovyMethods.toRowResult;
  * <h4>Named and named ordinal parameters</h4>
  *
  * Several of the methods in this class (ones which have a String-based sql query and params in
- * a List<Object> or Object[] or Map) support <em>named</em> or <em>named ordinal</em> parameters.
+ * a List&lt;Object&gt; or Object[] or Map) support <em>named</em> or <em>named ordinal</em> parameters.
  * These methods are useful for queries with large numbers of parameters - though the GString
  * variations are often preferred in such cases too. Reminder: when you see a variant with Object[] as
  * the type of the last parameter, Groovy allows vararg style parameters so you don't explicitly need to
@@ -217,6 +217,8 @@ import static org.codehaus.groovy.runtime.SqlGroovyMethods.toRowResult;
  * For advanced usage, the class provides numerous extension points for overriding the
  * facade behavior associated with the various aspects of managing
  * the interaction with the underlying database.
+ *
+ * This class is <b>not</b> thread-safe.
  *
  * @author Chris Stevenson
  * @author <a href="mailto:james@coredevelopers.net">James Strachan</a>
@@ -896,7 +898,7 @@ public class Sql {
      * used. Depending on which features you are using, you may be able to do
      * this on the connection object directly but the preferred approach is to
      * call the {@link #close()} method which will close the connection but also
-     * free any caches resources.
+     * free any cached resources.
      *
      * @param connection the Connection to use
      */
@@ -3465,7 +3467,7 @@ public class Sql {
      *
      * @param cacheStatements the new value
      */
-    public synchronized void setCacheStatements(boolean cacheStatements) {
+    public void setCacheStatements(boolean cacheStatements) {
         this.cacheStatements = cacheStatements;
         if (!cacheStatements) {
             clearStatementCache();
@@ -3487,7 +3489,7 @@ public class Sql {
      * @param closure the given closure
      * @throws SQLException if a database error occurs
      */
-    public synchronized void cacheConnection(Closure closure) throws SQLException {
+    public void cacheConnection(Closure closure) throws SQLException {
         boolean savedCacheConnection = cacheConnection;
         cacheConnection = true;
         Connection connection = null;
@@ -3512,7 +3514,7 @@ public class Sql {
      * @param closure the given closure
      * @throws SQLException if a database error occurs
      */
-    public synchronized void withTransaction(Closure closure) throws SQLException {
+    public void withTransaction(Closure closure) throws SQLException {
         boolean savedCacheConnection = cacheConnection;
         cacheConnection = true;
         Connection connection = null;
@@ -3831,7 +3833,7 @@ public class Sql {
      * @throws SQLException if a database error occurs
      * @see #setCacheStatements(boolean)
      */
-    public synchronized void cacheStatements(Closure closure) throws SQLException {
+    public void cacheStatements(Closure closure) throws SQLException {
         boolean savedCacheStatements = cacheStatements;
         cacheStatements = true;
         Connection connection = null;
@@ -4312,15 +4314,11 @@ public class Sql {
 
     private void clearStatementCache() {
         Statement statements[];
-        synchronized (statementCache) {
-            if (statementCache.isEmpty())
-                return;
-            // Arrange to call close() outside synchronized block, since
-            // the close may involve server requests.
-            statements = new Statement[statementCache.size()];
-            statementCache.values().toArray(statements);
-            statementCache.clear();
-        }
+        if (statementCache.isEmpty())
+            return;
+        statements = new Statement[statementCache.size()];
+        statementCache.values().toArray(statements);
+        statementCache.clear();
         for (Statement s : statements) {
             try {
                 s.close();
@@ -4336,12 +4334,10 @@ public class Sql {
     private Statement getAbstractStatement(AbstractStatementCommand cmd, Connection connection, String sql) throws SQLException {
         Statement stmt;
         if (cacheStatements) {
-            synchronized (statementCache) { // checking for existence without sync can cause leak if object needs close().
-                stmt = statementCache.get(sql);
-                if (stmt == null) {
-                    stmt = cmd.execute(connection, sql);
-                    statementCache.put(sql, stmt);
-                }
+            stmt = statementCache.get(sql);
+            if (stmt == null) {
+                stmt = cmd.execute(connection, sql);
+                statementCache.put(sql, stmt);
             }
         } else {
             stmt = cmd.execute(connection, sql);

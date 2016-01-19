@@ -34,6 +34,7 @@ import org.codehaus.groovy.ast.stmt.Statement;
 import org.codehaus.groovy.classgen.FinalVariableAnalyzer;
 import org.codehaus.groovy.classgen.Verifier;
 import org.codehaus.groovy.control.ResolveVisitor;
+import org.codehaus.groovy.runtime.InvokerHelper;
 import org.codehaus.groovy.tools.Utilities;
 import org.codehaus.groovy.transform.trait.Traits;
 import org.objectweb.asm.Opcodes;
@@ -197,7 +198,12 @@ public class JavaStubGenerator {
                     // not required for stub generation
                 }
             };
+            int origNumConstructors = classNode.getDeclaredConstructors().size();
             verifier.visitClass(classNode);
+            // undo unwanted side-effect of verifier
+            if (origNumConstructors == 0 && classNode.getDeclaredConstructors().size() == 1) {
+                classNode.getDeclaredConstructors().clear();
+            }
             currentModule = classNode.getModule();
 
             boolean isInterface = isInterfaceOrTrait(classNode);
@@ -362,7 +368,7 @@ public class JavaStubGenerator {
     }
 
     private void printEnumFields(PrintWriter out, List<FieldNode> fields) {
-        if (fields.size() != 0) {
+        if (!fields.isEmpty()) {
             boolean first = true;
             for (FieldNode field : fields) {
                 if (!first) {
@@ -436,7 +442,7 @@ public class JavaStubGenerator {
 
         BlockStatement block = (BlockStatement) code;
         List stats = block.getStatements();
-        if (stats == null || stats.size() == 0)
+        if (stats == null || stats.isEmpty())
             return null;
 
         Statement stat = (Statement) stats.get(0);
@@ -873,9 +879,15 @@ public class JavaStubGenerator {
                 val = constValue.toString();
             else
                 val = "\"" + escapeSpecialChars(constValue.toString()) + "\"";
-        } else if (memberValue instanceof PropertyExpression || memberValue instanceof VariableExpression) {
+        } else if (memberValue instanceof PropertyExpression) {
             // assume must be static class field or enum value or class that Java can resolve
             val = ((Expression) memberValue).getText();
+        } else if (memberValue instanceof VariableExpression) {
+            val = ((Expression) memberValue).getText();
+            //check for an alias
+            ImportNode alias = currentModule.getStaticImports().get(val);
+            if (alias != null)
+                val = alias.getClassName() + "." + alias.getFieldName();
         } else if (memberValue instanceof ClosureExpression) {
             // annotation closure; replaced with this specific class literal to cover the
             // case where annotation type uses Class<? extends Closure> for the closure's type
@@ -925,7 +937,8 @@ public class JavaStubGenerator {
         imports.addAll(Arrays.asList(ResolveVisitor.DEFAULT_IMPORTS));
 
         for (Map.Entry<String, ImportNode> entry : moduleNode.getStaticImports().entrySet()) {
-            imports.add("static "+entry.getValue().getType().getName()+"."+entry.getKey());
+            if (entry.getKey().equals(entry.getValue().getFieldName()))
+                imports.add("static "+entry.getValue().getType().getName()+"."+entry.getKey());
         }
 
         for (Map.Entry<String, ImportNode> entry : moduleNode.getStaticStarImports().entrySet()) {
@@ -951,7 +964,8 @@ public class JavaStubGenerator {
     }
 
     private static String escapeSpecialChars(String value) {
-        return value.replace("\n", "\\n").replace("\r", "\\r").replace("\"", "\\\"");
+        return InvokerHelper.escapeBackslashes(value).replace("\"", "\\\"");
+
     }
 
     private static boolean isInterfaceOrTrait(ClassNode cn) {

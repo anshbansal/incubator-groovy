@@ -726,7 +726,7 @@ public class StreamingTemplateEngine extends TemplateEngine {
         }
 
         /**
-         * Parse a <% .... %> section if we are writing a GString close and
+         * Parse a &lt;% .... %&gt; section if we are writing a GString close and
          * append ';' then write the section as a statement
          */
         private void parseSection(final int pendingC,
@@ -754,7 +754,7 @@ public class StreamingTemplateEngine extends TemplateEngine {
         }
 
         /**
-         * Parse a <%= .... %> expression
+         * Parse a &lt;%= .... %&gt; expression
          */
         private void parseExpression(final Reader reader,
                 final StringBuilder target,
@@ -802,7 +802,7 @@ public class StreamingTemplateEngine extends TemplateEngine {
             ErrorCollector collector = e.getErrorCollector();
             @SuppressWarnings({"unchecked"})
             List<Message> errors = (List<Message>) collector.getErrors();
-            if (errors.size() > 0) {
+            if (!errors.isEmpty()) {
                 Message firstMessage = errors.get(0);
                 if (firstMessage instanceof SyntaxErrorMessage) {
                     @SuppressWarnings({"ThrowableResultOfMethodCallIgnored"})

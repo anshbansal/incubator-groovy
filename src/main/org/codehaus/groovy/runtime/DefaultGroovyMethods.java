@@ -61,6 +61,7 @@ import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.net.MalformedURLException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -170,6 +171,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
 //            NioGroovyMethods.class
     };
     private static final Object[] EMPTY_OBJECT_ARRAY = new Object[0];
+    private static final NumberAwareComparator<Comparable> COMPARABLE_NUMBER_AWARE_COMPARATOR = new NumberAwareComparator<Comparable>();
 
     /**
      * Identity check. Since == is overridden in Groovy with the meaning of equality
@@ -372,7 +374,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
 
     /**
      * Convenience method that calls {@link #getMetaPropertyValues(java.lang.Object)}(self)
-     * and provides the data in form of simple key/value pairs, i.e.&nsbp;without
+     * and provides the data in form of simple key/value pairs, i.e. without
      * type() information.
      *
      * @param self the receiver object
@@ -1115,8 +1117,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
      * @since 1.6.0
      */
     public static int numberAwareCompareTo(Comparable self, Comparable other) {
-        NumberAwareComparator<Comparable> numberAwareComparator = new NumberAwareComparator<Comparable>();
-        return numberAwareComparator.compare(self, other);
+        return COMPARABLE_NUMBER_AWARE_COMPARATOR.compare(self, other);
     }
 
     /**
@@ -2187,7 +2188,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
     }
 
     /**
-     * Used to determine if the given predicate closure is valid (i.e.&nsbp;returns
+     * Used to determine if the given predicate closure is valid (i.e. returns
      * <code>true</code> for all items in this data structure).
      * A simple example for a list:
      * <pre>def list = [3,4,5]
@@ -2210,7 +2211,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
     }
 
     /**
-     * Used to determine if the given predicate closure is valid (i.e.&nsbp;returns
+     * Used to determine if the given predicate closure is valid (i.e. returns
      * <code>true</code> for all items in this iterator).
      * A simple example for a list:
      * <pre>def list = [3,4,5]
@@ -2233,7 +2234,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
     }
 
     /**
-     * Used to determine if the given predicate closure is valid (i.e.&nsbp;returns
+     * Used to determine if the given predicate closure is valid (i.e. returns
      * <code>true</code> for all items in this iterable).
      * A simple example for a list:
      * <pre>def list = [3,4,5]
@@ -3051,7 +3052,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
     public static <T> List<List<T>> collate(Iterable<T> self, int size, int step, boolean keepRemainder) {
         List<T> selfList = asList(self);
         List<List<T>> answer = new ArrayList<List<T>>();
-        if (size <= 0 || selfList.size() == 0) {
+        if (size <= 0 || selfList.isEmpty()) {
             answer.add(selfList);
         } else {
             for (int pos = 0; pos < selfList.size() && pos > -1; pos += step) {
@@ -3785,8 +3786,14 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
         } else if (newEntry instanceof List) {
             List list = (List) newEntry;
             // def (key, value) == list
-            Object key = list.size() == 0 ? null : list.get(0);
+            Object key = list.isEmpty() ? null : list.get(0);
             Object value = list.size() <= 1 ? null : list.get(1);
+            leftShift(result, new MapEntry(key, value));
+        } else if (newEntry.getClass().isArray()) {
+            Object[] array = (Object[]) newEntry;
+            // def (key, value) == array.toList()
+            Object key = array.length == 0 ? null : array[0];
+            Object value = array.length <= 1 ? null : array[1];
             leftShift(result, new MapEntry(key, value));
         } else {
             // TODO: enforce stricter behavior?
@@ -6805,6 +6812,25 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
     }
 
     /**
+     * Check whether an <code>Iterable</code> has elements
+     * <pre class="groovyTestCase">
+     * def items = [1]
+     * def iterable = { [ hasNext:{ !items.isEmpty() }, next:{ items.pop() } ] as Iterator } as Iterable
+     * assert !iterable.isEmpty()
+     * iterable.iterator().next()
+     * assert iterable.isEmpty()
+     * </pre>
+     *
+     * @param self an Iterable
+     * @return true if the iterable has no elements, false otherwise
+     * @since 2.5.0
+     */
+    public static boolean isEmpty(Iterable self) {
+        return !self.iterator().hasNext();
+    }
+
+
+    /**
      * Support the range subscript operator for a List.
      * <pre class="groovyTestCase">def list = [1, "a", 4.5, true]
      * assert list[1..2] == ["a", 4.5]</pre>
@@ -7140,7 +7166,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
      * </pre>
      *
      * @param self an Iterator
-     * @param idx  an index value (-self.size() <= idx < self.size())
+     * @param idx  an index value (-self.size() &lt;= idx &lt; self.size())
      * @return the value at the given index (after normalisation) or null if no corresponding value was found
      * @since 1.7.2
      */
@@ -7183,7 +7209,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
      * </pre>
      *
      * @param self an Iterable
-     * @param idx  an index value (-self.size() <= idx < self.size()) but using -ve index values will be inefficient
+     * @param idx  an index value (-self.size() &lt;= idx &lt; self.size()) but using -ve index values will be inefficient
      * @return the value at the given index (after normalisation) or null if no corresponding value was found
      * @since 2.1.0
      */
@@ -9063,6 +9089,20 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
     }
 
     /**
+     * Calculates the tail values of this Iterable: the first value will be this list of all items from the iterable and the final one will be an empty list, with the intervening values the results of successive applications of tail on the items.
+     * <pre class="groovyTestCase">
+     * assert [1, 2, 3, 4].tails() == [[1, 2, 3, 4], [2, 3, 4], [3, 4], [4], []]
+     * </pre>
+     *
+     * @param self an Iterable
+     * @return a List of the tail values from the given Iterable
+     * @since 2.5.0
+     */
+    public static <T> List<List<T>> tails(Iterable<T> self) {
+        return GroovyCollections.tails(self);
+    }
+
+    /**
      * Returns the items from the Iterable excluding the first item.
      * <pre class="groovyTestCase">
      * def list = [3, 4, 2]
@@ -9123,6 +9163,20 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
         }
         self.next();
         return self;
+    }
+
+    /**
+     * Calculates the init values of this Iterable: the first value will be this list of all items from the iterable and the final one will be an empty list, with the intervening values the results of successive applications of init on the items.
+     * <pre class="groovyTestCase">
+     * assert [1, 2, 3, 4].inits() == [[1, 2, 3, 4], [1, 2, 3], [1, 2], [1], []]
+     * </pre>
+     *
+     * @param self an Iterable
+     * @return a List of the init values from the given Iterable
+     * @since 2.5.0
+     */
+    public static <T> List<List<T>> inits(Iterable<T> self) {
+        return GroovyCollections.inits(self);
     }
 
     /**
@@ -10578,7 +10632,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
      * Converts the given collection to another type. A default concrete
      * type is used for List, Set, or SortedSet. If the given type has
      * a constructor taking a collection, that is used. Otherwise, the
-     * call is deferred to {link #asType(Object,Class)}.  If this
+     * call is deferred to {@link #asType(Object,Class)}.  If this
      * collection is already of the given type, the same instance is
      * returned.
      *
@@ -10645,7 +10699,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
     /**
      * Converts the given array to either a List, Set, or
      * SortedSet.  If the given class is something else, the
-     * call is deferred to {link #asType(Object,Class)}.
+     * call is deferred to {@link #asType(Object,Class)}.
      *
      * @param ary   an array
      * @param clazz the desired class
@@ -11257,6 +11311,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
     /**
      * Create a Collection composed of the intersection of both collections.  Any
      * elements that exist in both collections are added to the resultant collection.
+     * For collection of custom objects; objects should implement java.lang.Comparable  
      * <pre class="groovyTestCase">assert [4,5] == [1,2,3,4,5].intersect([4,5,6,7,8])</pre>
      *
      * @param left  a Collection
@@ -11292,6 +11347,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
     /**
      * Create a Collection composed of the intersection of both iterables.  Any
      * elements that exist in both iterables are added to the resultant collection.
+     * For collection of custom objects; objects should implement java.lang.Comparable  
      * <pre class="groovyTestCase">assert [4,5] == [1,2,3,4,5].intersect([4,5,6,7,8])</pre>
      *
      * @param left  an Iterable
@@ -11358,7 +11414,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
      */
     public static <K,V> Map<K,V> intersect(Map<K,V> left, Map<K,V> right) {
         final Map<K,V> ansMap = createSimilarMap(left);
-        if (right != null && right.size() > 0) {
+        if (right != null && !right.isEmpty()) {
             for (Map.Entry<K, V> e1 : left.entrySet()) {
                 for (Map.Entry<K, V> e2 : right.entrySet()) {
                     if (DefaultTypeTransformation.compareEqual(e1, e2)) {
@@ -11593,7 +11649,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
             if (!found) return false;
             otherItems.remove(foundItem);
         }
-        return otherItems.size() == 0;
+        return otherItems.isEmpty();
     }
 
     /**
@@ -11780,7 +11836,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
      */
     public static <T> Collection<T> minus(Collection<T> self, Collection<?> removeMe) {
         Collection<T> ansCollection = createSimilarCollection(self);
-        if (self.size() == 0)
+        if (self.isEmpty())
             return ansCollection;
         T head = self.iterator().next();
 
@@ -11931,7 +11987,7 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
     public static <K,V> Map<K,V> minus(Map<K,V> self, Map removeMe) {
         final Map<K,V> ansMap = createSimilarMap(self);
         ansMap.putAll(self);
-        if (removeMe != null && removeMe.size() > 0) {
+        if (removeMe != null && !removeMe.isEmpty()) {
             for (Map.Entry<K, V> e1 : self.entrySet()) {
                 for (Object e2 : removeMe.entrySet()) {
                     if (DefaultTypeTransformation.compareEqual(e1, e2)) {
@@ -14952,17 +15008,23 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
      * @since 1.6.0
      */
     public static float trunc(Float number, int precision) {
+        if (number < 0f) {
+            return (float)(Math.ceil(number.doubleValue()*Math.pow(10,precision))/Math.pow(10,precision));
+        }
         return (float)(Math.floor(number.doubleValue()*Math.pow(10,precision))/Math.pow(10,precision));
     }
 
     /**
      * Truncate the value
      *
-     * @param number a Double
-     * @return the Double truncated to 0 decimal places (i.e. a synonym for floor)
+     * @param number a Float
+     * @return the Float truncated to 0 decimal places
      * @since 1.6.0
      */
     public static float trunc(Float number) {
+        if (number < 0f) {
+            return (float)Math.ceil(number.doubleValue());
+        }
         return (float)Math.floor(number.doubleValue());
     }
 
@@ -14993,10 +15055,13 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
      * Truncate the value
      *
      * @param number a Double
-     * @return the Double truncated to 0 decimal places (i.e. a synonym for floor)
+     * @return the Double truncated to 0 decimal places
      * @since 1.6.4
      */
     public static double trunc(Double number) {
+        if (number < 0d) {
+            return Math.ceil(number);
+        }
         return Math.floor(number);
     }
 
@@ -15009,7 +15074,72 @@ public class DefaultGroovyMethods extends DefaultGroovyMethodsSupport {
      * @since 1.6.4
      */
     public static double trunc(Double number, int precision) {
+        if (number < 0d) {
+            return Math.ceil(number *Math.pow(10,precision))/Math.pow(10,precision);
+        }
         return Math.floor(number *Math.pow(10,precision))/Math.pow(10,precision);
+    }
+
+    /**
+     * Round the value
+     * <p>
+     * Note that this method differs from {@link java.math.BigDecimal#round(java.math.MathContext)}
+     * which specifies the digits to retain starting from the leftmost nonzero
+     * digit. This methods rounds the integral part to the nearest whole number.
+     *
+     * @param number a BigDecimal
+     * @return the rounded value of that BigDecimal
+     * @see #round(java.math.BigDecimal, int)
+     * @see java.math.BigDecimal#round(java.math.MathContext)
+     * @since 2.5.0
+     */
+    public static BigDecimal round(BigDecimal number) {
+        return round(number, 0);
+    }
+
+    /**
+     * Round the value
+     * <p>
+     * Note that this method differs from {@link java.math.BigDecimal#round(java.math.MathContext)}
+     * which specifies the digits to retain starting from the leftmost nonzero
+     * digit. This method operates on the fractional part of the number and
+     * the precision argument specifies the number of digits to the right of
+     * the decimal point to retain.
+     *
+     * @param number a BigDecimal
+     * @param precision the number of decimal places to keep
+     * @return a BigDecimal rounded to the number of decimal places specified by precision
+     * @see #round(java.math.BigDecimal)
+     * @see java.math.BigDecimal#round(java.math.MathContext)
+     * @since 2.5.0
+     */
+    public static BigDecimal round(BigDecimal number, int precision) {
+        return number.setScale(precision, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Truncate the value
+     *
+     * @param number a BigDecimal
+     * @return a BigDecimal truncated to 0 decimal places
+     * @see #trunc(java.math.BigDecimal, int)
+     * @since 2.5.0
+     */
+    public static BigDecimal trunc(BigDecimal number) {
+        return trunc(number, 0);
+    }
+
+    /**
+     * Truncate the value
+     *
+     * @param number a BigDecimal
+     * @param precision the number of decimal places to keep
+     * @return a BigDecimal truncated to the number of decimal places specified by precision
+     * @see #trunc(java.math.BigDecimal)
+     * @since 2.5.0
+     */
+    public static BigDecimal trunc(BigDecimal number, int precision) {
+        return number.setScale(precision, RoundingMode.DOWN);
     }
 
     /**

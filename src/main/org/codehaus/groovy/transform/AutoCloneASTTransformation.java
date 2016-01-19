@@ -83,7 +83,7 @@ public class AutoCloneASTTransformation extends AbstractASTTransformation {
             cNode.addInterface(CLONEABLE_TYPE);
             boolean includeFields = memberHasValue(anno, "includeFields", true);
             AutoCloneStyle style = getStyle(anno, "style");
-            List<String> excludes = getMemberList(anno, "excludes");
+            List<String> excludes = getMemberStringList(anno, "excludes");
             if (!checkPropertyList(cNode, excludes, "excludes", anno, MY_TYPE_NAME, includeFields)) return;
             List<FieldNode> list = getInstancePropertyFields(cNode);
             if (includeFields) {
@@ -138,7 +138,7 @@ public class AutoCloneASTTransformation extends AbstractASTTransformation {
     }
 
     private void createCloneCopyConstructor(ClassNode cNode, List<FieldNode> list, List<String> excludes) {
-        if (cNode.getDeclaredConstructors().size() == 0) {
+        if (cNode.getDeclaredConstructors().isEmpty()) {
             // add no-arg constructor
             BlockStatement noArgBody = new BlockStatement();
             noArgBody.addStatement(EmptyStatement.INSTANCE);
@@ -161,7 +161,7 @@ public class AutoCloneASTTransformation extends AbstractASTTransformation {
             }
             for (FieldNode fieldNode : list) {
                 String name = fieldNode.getName();
-                if (excludes.contains(name)) continue;
+                if (excludes != null && excludes.contains(name)) continue;
                 ClassNode fieldType = fieldNode.getType();
                 Expression direct = propX(other, name);
                 Expression to = propX(varX("this"), name);
@@ -199,7 +199,7 @@ public class AutoCloneASTTransformation extends AbstractASTTransformation {
     }
 
     private void createSimpleClone(ClassNode cNode, List<FieldNode> fieldNodes, List<String> excludes) {
-        if (cNode.getDeclaredConstructors().size() == 0) {
+        if (cNode.getDeclaredConstructors().isEmpty()) {
             // add no-arg constructor
             cNode.addConstructor(ACC_PUBLIC, Parameter.EMPTY_ARRAY, ClassNode.EMPTY_ARRAY, block(EmptyStatement.INSTANCE));
         }
@@ -222,7 +222,7 @@ public class AutoCloneASTTransformation extends AbstractASTTransformation {
         }
         for (FieldNode fieldNode : fieldNodes) {
             String name = fieldNode.getName();
-            if (excludes.contains(name)) continue;
+            if (excludes != null && excludes.contains(name)) continue;
             ClassNode fieldType = fieldNode.getType();
             Expression direct = propX(varX("this"), name);
             Expression to = propX(other, name);
@@ -246,7 +246,7 @@ public class AutoCloneASTTransformation extends AbstractASTTransformation {
         final Expression result = varX("_result", cNode);
         body.addStatement(declS(result, castX(cNode, callSuperX("clone"))));
         for (FieldNode fieldNode : fieldNodes) {
-            if (excludes.contains(fieldNode.getName())) continue;
+            if (excludes != null && excludes.contains(fieldNode.getName())) continue;
             ClassNode fieldType = fieldNode.getType();
             Expression fieldExpr = varX(fieldNode);
             Expression to = propX(result, fieldNode.getName());
